@@ -14,6 +14,8 @@ library(iNEXT)
 library(ggplot2)
 library(gridExtra)
 library(car)
+library(dplyr)
+library(ggplot2)
 
 #setwd("C:/Users/YourPath")
 
@@ -50,8 +52,10 @@ species_matrix[is.na(species_matrix)] <- 0
 # No. of species -- 73
 ncol(species_matrix)
 
+#################################################################
 ################ (1)  Species accumulation curve ################
 # Has the project had enough sampling? 
+#################################################################
 
 head(species_matrix)
 curva <- specaccum(species_matrix[, -1])
@@ -258,7 +262,10 @@ species_matrixw %>%
     especies_en_cob_4 = sum(`4` > 0, na.rm = TRUE)
   )
 
-################## Analisis clasico
+#################################################################
+############# (2)  Differences in Species Richness ##############
+# Do restoration stage vary in species richness? Do it vary in diversity?
+#################################################################
 
 ambiental <- Aves %>%
   #select(plot_parcela, treatment, age)
@@ -279,7 +286,7 @@ sppr_df <- enframe(sppr, name = "plot_parcela", value = "sppr")
 sppr_df <- sppr_df %>%
   left_join(ambiental, by = "plot_parcela")
 
-#supuestos
+#Assumptions
 shapiro.test(residuals(sppr_aov)) # 0.03 no normal
 leveneTest(sppr ~ as.factor(age), data = sppr_df) #homogenity of variances - 0.2
 
@@ -348,7 +355,7 @@ ambientald <- Aves %>%
 sppr_aovd <- aov(sppr ~ treatment, data = sppr_df)
 summary(sppr_aovd) # Pareciaria no haber dif sig. en sp richness por cobertura
 
-################ Assuptions
+################ Assumptions
 
 shapiro.test(residuals(sppr_aovd)) # 0.06 then normal
 leveneTest(sppr_aovd) #homogenity of variances
@@ -365,10 +372,12 @@ ggplot(sppr_dfd, aes(x = factor(treatment.x), y = sppr, fill = factor(treatment.
   theme_minimal()+
   theme(legend.position = "none") 
 
+#################################################################
+########### (3)  Differences in Community Composition ############
+# Do species composition vary across restoration stage?
+#################################################################
 
-################## COMPOSITION
-
-###################TOP 5
+################### TOP 5: the most abundant species per age
 
 # Summarize total abundance per species per age
 species_abundance <- Aves %>%
@@ -407,10 +416,7 @@ ggplot(relative_abundance, aes(x = factor(age), y = rel_abundance, fill = specie
   ) +
   theme_minimal()
 
-###################### TODOS
-
-library(dplyr)
-library(ggplot2)
+###################### Now, analyze the whole community
 
 # Summarize total abundance per species per age
 species_abundance <- Aves %>%
@@ -475,7 +481,7 @@ ggplot(relative_abundance, aes(x = factor(age), y = rel_abundance, fill = specie
   #scale_fill_brewer(palette = "Paired") + 
   theme(legend.position = "right")
 
-############ PERMANOVA
+############ PERMANOVA -- Differences in community composition using bray-curtis distance
 
 # Make sure Aves has only relevant columns
 aves_clean <- Aves %>%
