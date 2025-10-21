@@ -2,4 +2,4 @@
 
 ***Overview***
 
-This repository contains scripts developed by Osa Conservation (OC) for analyzing mangrove restoration monitoring data collected between 2022 and 2025+. The analysis focuses on the outcomes of restoration interventions implemented in the Terraba-Sierpe National Wetland, one of Central America's largest mangrove ecosystems.
+This repository contains scripts developed for Osa Conservation (OC) to analyze mangrove restoration monitoring data collected from 2022 to 2025 and beyond. The analysis evaluates the outcomes of various restoration interventions carried out in the Terraba-Sierpe National Wetland, one of the largest and most ecologically significant mangrove ecosystems in Central America.
