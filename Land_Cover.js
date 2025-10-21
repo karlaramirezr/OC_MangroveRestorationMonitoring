@@ -4,7 +4,7 @@
 //                        Karla Ramírez-Ruiz
 //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
+// Here the link on GEE: https://code.earthengine.google.com/?accept_repo=users/karlaramirez/HNTS_multitemporal
 // Get the first planetscope image filtered by the ROI
 
 var image2023 = ee.Image('projects/mangroverestoration/assets/HNTS/2023_Planet');
