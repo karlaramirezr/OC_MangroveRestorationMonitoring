@@ -92,11 +92,11 @@ function addIndices(image){
 
 var img2019 = addIndices(
     getComposite('2019-01-01','2019-04-15'));
-print(img2019);
+//print(img2019);
 
 var img2026 = addIndices(
     getComposite('2026-01-01','2026-04-15'));
-print(img2026);
+//print(img2026);
     
 // Bands
 
@@ -109,7 +109,7 @@ var bands = [ 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B11',
 var trueColor = {bands: ['B4', 'B3', 'B2'], min: 0.02, max: 0.30, gamma: 1.2};
 var mviVis = {min: 0,   max: 8,  palette: ['f7fcf5', 'c7e9c0', '74c476','238b45','00441b']};
 
-Map.centerObject(studyArea, 12);
+//Map.centerObject(studyArea, 12);
 
 //Map.addLayer(img2019, trueColor, '2019 - True Color', true );
 //Map.addLayer(img2019.select('MVI'), mviVis, '2019 - MVI'); //,  false);
@@ -157,8 +157,8 @@ var classifier = ee.Classifier.smileRandomForest({
 var validation = test.classify(classifier);
 var matrix = validation.errorMatrix('class','classification');
 //print('Confusion Matrix',matrix);
-//print('Overall Accuracy',matrix.accuracy());
-//print('Kappa',matrix.kappa());
+//print('Overall Accuracy',matrix.accuracy()); // 0.9852876121980108
+//print('Kappa',matrix.kappa()); // 0.9786435112154624
 
 // Land Cover Classification
 
@@ -203,7 +203,7 @@ var palette = [
 '646400'    // Other Vegetation
 ];
 
-Map.addLayer(lc2019,{min:0,max:5, palette:palette},'Land Cover 2019');
+//Map.addLayer(lc2019,{min:0,max:5, palette:palette},'Land Cover 2019');
 
 Map.addLayer(lc2026,{min:0, max:5, palette:palette},'Land Cover 2026');
 
@@ -256,7 +256,31 @@ var mfTransitions = mfChange.updateMask(
     .or(mfChange.eq(3))
 );
 
-Map.addLayer(mfTransitions, {min: 2, max: 3,
-    palette: ['FFFF00',  // 2 = Mangrove → Fern
-      '00A000'   // 3 = Fern → Mangrove
-    ] },  'Mangrove ↔ Fern Transitions',  true);
+//Map.addLayer(mfTransitions, {min: 2, max: 3,
+//    palette: ['FFFF00',  // 2 = Mangrove → Fern
+//      '00A000'   // 3 = Fern → Mangrove
+//    ] },  'Mangrove ↔ Fern Transitions',  true);
+    
+//Export.image.toDrive({
+//  image: lc2019.toByte(),
+//  description: 'LandCover_2019_HNTS_Sentinel',
+//  fileNamePrefix: 'LandCover_2019_HNTS_Sentinel',
+//  region: studyArea, 
+// scale: 10
+//});
+
+//Export.image.toDrive({
+//  image: lc2026.toByte(),
+//  description: 'LandCover_2026_HNTS_Sentinel',
+//  fileNamePrefix: 'LandCover_2026_HNTS_Sentinel',
+// region: studyArea, 
+//  scale: 10
+//});
+
+//Export.image.toDrive({
+//  image: mfTransitions,
+//  description: 'Mangrove_Fern_Transitions_2019_2026',
+//  fileNamePrefix: 'Mangrove_Fern_Transitions_2019_2026_Sentinel',
+//   scale: 10,
+//  region: lc2019.geometry()
+//});
