@@ -197,19 +197,20 @@ var palette = [
 
 '006400',   // Mangrove
 'ffff00',   // Fern
+ 'ffffff',   //  White/Missing data)
 '0000b3',   // Water
 'ff0000',   // Artificial
 'd2b48c' ,   // Bare soil
 '646400'    // Other Vegetation
 ];
 
-//Map.addLayer(lc2019,{min:0,max:5, palette:palette},'Land Cover 2019');
+//Map.addLayer(lc2019,{min:0,max:6, palette:palette},'Land Cover 2019');
 
-Map.addLayer(lc2026,{min:0, max:5, palette:palette},'Land Cover 2026');
+//Map.addLayer(lc2026,{min:0, max:6, palette:palette},'Land Cover 2026');
 
 // Land Cover Change Map
 
-//var change = lc2019.multiply(10).add(lc2026);
+var change = lc2019.multiply(10).add(lc2026);
 //Map.addLayer(change,{},'Change');
 
 // Specific changes : MANGROVE / FERN TRANSITION MAP
@@ -253,14 +254,21 @@ var mfChange = ee.Image(0)
     
 var mfTransitions = mfChange.updateMask(
   mfChange.eq(2)
-    .or(mfChange.eq(3))
-);
+    .or(mfChange.eq(3)));
 
-//Map.addLayer(mfTransitions, {min: 2, max: 3,
-//    palette: ['FFFF00',  // 2 = Mangrove → Fern
-//      '00A000'   // 3 = Fern → Mangrove
-//    ] },  'Mangrove ↔ Fern Transitions',  true);
-    
+Map.addLayer(mfTransitions, {min: 2, max: 3,
+    palette: ['FFFF00',  // 2 = Mangrove → Fern
+      '00A000'   // 3 = Fern → Mangrove
+    ] },  'Mangrove ↔ Fern Transitions',  true);
+
+Export.image.toDrive({
+  image: mfTransitions,
+  description: 'Mangrove_Fern_Transitions_HNTS_Sentinel_2019_2026',
+  fileNamePrefix: 'Mangrove_Fern_Transitions_HNTS_Sentinel_2019_2026',
+  region: studyArea, 
+ scale: 10
+});
+
 //Export.image.toDrive({
 //  image: lc2019.toByte(),
 //  description: 'LandCover_2019_HNTS_Sentinel',
@@ -284,3 +292,34 @@ var mfTransitions = mfChange.updateMask(
 //   scale: 10,
 //  region: lc2019.geometry()
 //});
+
+///////////////////// Visualiza todas las transiciones
+
+// 1. Create a mask where 2019 does NOT equal 2026 (isolates change)
+//var changeMask = lc2019.neq(lc2026);
+
+// 2. Apply the mask to the 2026 classification map
+// This leaves ONLY the pixels that changed, showing their new 2026 class
+//var allTransitions = lc2026.updateMask(changeMask);
+
+// 3. Define the destination color palette (matching your original colors)
+// 0 = Mangrove (Dark Green)
+// 1 = Fern (Yellow)
+// 3 = Water (Blue)
+// 4 = Artificial (Red)
+// 5 = Bare soil (Tan/Light Brown)
+// 6 = Other Vegetation (Olive)
+var transitionVisualPalette = [
+  '006400', // Changed INTO Mangrove (Dark Green) -> e.g., Restoration
+  'ffff00', // Changed INTO Fern (Yellow) -> e.g., Degradation
+  'ffffff',   //  White/Missing data)
+'0000b3', // Changed INTO Water (Blue)
+  'ff0000', // Changed INTO Artificial (Red) -> e.g., Infrastructure growth
+  'd2b48c', // Changed INTO Bare soil (Tan)
+  '646400'  // Changed INTO Other Veg (Olive)
+];
+
+// 4. Add the transition layer to the interactive map
+// We specify min:0 and max:6 to match your class definitions perfectly
+//Map.addLayer(allTransitions, {min: 0,  max: 6,   palette: transitionVisualPalette
+//}, 'All Transitions (Colored by 2026 Destination)');
