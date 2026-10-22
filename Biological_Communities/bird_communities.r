@@ -15,11 +15,9 @@ library(ggplot2)
 library(gridExtra)
 library(car)
 library(dplyr)
-library(ggplot2)
 
-#setwd("C:/Users/YourPath")
 
-Aves <- read_csv("aves_vff.csv")
+Aves <- read_csv("avesv1.csv")
 head(Aves)
 
 # Clean database
@@ -35,12 +33,12 @@ Aves <- Aves %>%
     TRUE ~ sc_name  # mantener el valor original si no hay coincidencia
   ))
 
-Aves <- Aves %>%
-  mutate(plot_parcela = str_c(plot_id, parcela, sep = "_"))
+#Aves <- Aves %>%
+ # mutate(plot_parcela = str_c(plot_id, parcela, sep = "_"))
 
 # Species per site matrix
 species_matrix <- Aves %>%
-  group_by(plot_parcela, sc_name) %>%
+  group_by(plot_id, sc_name) %>%
   summarise(total_abundance = max(abundance), .groups = 'drop') %>%
   # pivot_wider(names_from = plot_parcela,  # now columns are sites
   pivot_wider(names_from = sc_name,  # now columns are sites
@@ -49,7 +47,7 @@ species_matrix <- Aves %>%
 head(species_matrix)
 species_matrix[is.na(species_matrix)] <- 0
 
-# No. of species -- 73
+# No. of species -- 73 - 85
 ncol(species_matrix)
 
 #################################################################
@@ -64,26 +62,27 @@ plot(curva)  #con todos los datos pero esperamos que haya una comunidad diferent
 # Non restoration
 species_matrix_NF <- Aves %>%
   filter(treatment == "NF") %>%
-  group_by(plot_parcela, sc_name) %>%
+  group_by(plot_id, sc_name) %>%
   summarise(total_abundance = max(abundance), .groups = 'drop') %>%
   pivot_wider(names_from = sc_name, values_from = total_abundance, values_fill = 0)
 
 head(species_matrix_NF)
 #curvaNF <- specaccum(species_matrix_NF[, -1], method="rarefaction")
 curvaNF <- specaccum(species_matrix_NF[, -1]) #27 sp
-plot(curvaNF, main="Curva de acumulación de especies multianual en negraforra")
+plot(curvaNF, main="Curva de acumulaciC3n de especies multianual en negraforra")
 
 # Restoration
 species_matrix_RF <- Aves %>%
   filter(treatment == "RF") %>%
-  group_by(plot_parcela, sc_name) %>%
+  group_by(plot_id, sc_name) %>%
   summarise(total_abundance = max(abundance), .groups = 'drop') %>%
   pivot_wider(names_from = sc_name, values_from = total_abundance, values_fill = 0)
 
 head(species_matrix_RF)
 species_matrix_RF[is.na(species_matrix_RF)] <- 0
 curvaRF <- specaccum(species_matrix_RF[, -1])
-plot(curvaRF, main="Curva de acumulación de especies multianual en parcelas de restauración")
+plot(curvaRF, main="Curva de acumulaciC3n de especies multianual en parcelas de restauraciC3n")
+
 
 
 ### Another option.. with Hill numbers. 
@@ -167,9 +166,9 @@ grid.arrange(plot_dq0, plot_dq1, plot_dq2, ncol = 3)
 #species_matrixc <- Aves %>%
 #  group_by(treatment, sc_name) %>%
 #  summarise(total_abundance = sum(abundance), .groups = 'drop') %>%
-  # pivot_wider(names_from = plot_parcela,  # now columns are sites
- # pivot_wider(names_from = treatment,  # now columns are sites
-          #    values_from = total_abundance, values_fill = 0)
+# pivot_wider(names_from = plot_parcela,  # now columns are sites
+# pivot_wider(names_from = treatment,  # now columns are sites
+#    values_from = total_abundance, values_fill = 0)
 
 #sp_matrixc <- as.data.frame(species_matrixc)
 #sp_matrixc[is.na(sp_matrixc)] <- 0
@@ -513,4 +512,3 @@ dist_matrix <- vegdist(abund_only, method = "bray")
 
 adonis_result <- adonis2(dist_matrix ~ age, data = adonis_data, permutations = 999)
 print(adonis_result)
-
