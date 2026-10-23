@@ -15,6 +15,7 @@ library(ggplot2)
 library(gridExtra)
 library(car)
 library(dplyr)
+library(patchwork) # Para combinar gráficos con leyenda compartida
 
 
 Aves <- read_csv("avesv1.csv")
@@ -268,26 +269,32 @@ species_matrixw %>%
 
 ambiental <- Aves %>%
   #select(plot_parcela, treatment, age)
-  select(plot_parcela, age)%>%
+  select(plot_id, age)%>%
   distinct()
 
 # Calculate species richness for each plot
 sppr <- species_matrix %>%
-  column_to_rownames(var = "plot_parcela") %>%
+  column_to_rownames(var = "plot_id") %>%
   specnumber()
 
 sppr
 
 # Convert species richness to a dataframe
-sppr_df <- enframe(sppr, name = "plot_parcela", value = "sppr")
+sppr_df <- enframe(sppr, name = "plot_id", value = "sppr")
 
 # Join with environmental data (age)
 sppr_df <- sppr_df %>%
-  left_join(ambiental, by = "plot_parcela")
+  left_join(ambiental, by = "plot_id")
+
+sppr_df <- sppr_df %>%
+  mutate(
+    age = ifelse(age == "BM", "10", age),
+    age = ifelse(age %in% c("6", "7"), "6.5", age)
+  )
 
 #Assumptions
-shapiro.test(residuals(sppr_aov)) # 0.03 no normal
-leveneTest(sppr ~ as.factor(age), data = sppr_df) #homogenity of variances - 0.2
+#shapiro.test(residuals(sppr_aov)) # 0.03 no normal
+leveneTest(sppr ~ as.factor(age), data = sppr_df) #homogenity of variances - 0.3
 
 ## since data is not normal use kruskal wallis
 kruskal.test(sppr ~ age, data = sppr_df) # 0.07 We fail to reject the hypothesis that all groups have equal distribution of richness
@@ -512,3 +519,306 @@ dist_matrix <- vegdist(abund_only, method = "bray")
 
 adonis_result <- adonis2(dist_matrix ~ age, data = adonis_data, permutations = 999)
 print(adonis_result)
+
+
+#################################333 Version 2026 #############33
+
+# library(tidyverse)
+library(iNEXT)
+library(ggplot2)
+
+# 1. Unir categorías 6 y 7 + Corregir suma de abundancia
+species_matrixq <- Aves %>%
+  mutate(age = case_when(
+    age %in% c("6", "7", 6, 7) ~ "6-7",
+    TRUE ~ as.character(age)
+  )) %>%
+  group_by(age, sc_name) %>%
+  summarise(total_abundance = sum(abundance, na.rm = TRUE), .groups = 'drop') %>%
+  pivot_wider(
+    names_from = age, 
+    values_from = total_abundance, 
+    values_fill = 0
+  )
+
+# 2. Formatear matriz (especies en filas, sitios/edades en columnas)
+sp_matrixq <- as.data.frame(species_matrixq)
+rownames(sp_matrixq) <- sp_matrixq$sc_name
+sp_matrixq <- sp_matrixq[, -1]
+
+# 3. Calcular iNEXT para q = 0, 1 y 2 simultáneamente
+Dq <- iNEXT(sp_matrixq, q = c(0, 1, 2), datatype = "abundance", endpoint = 150)
+
+q_labels <- c(
+  "0" = "Riqueza de especies (q = 0)",
+  "1" = "Diversidad de Shannon (q = 1)",
+  "2" = "Diversidad de Simpson (q = 2)"
+)
+
+# -------------------------------------------------------------------------
+# OPCIÓN A: Gráficos por número de individuos (type = 1) unificados en facetas
+# -------------------------------------------------------------------------
+plot_individuos <- ggiNEXT(Dq, type = 1, facet.var = "Order.q") +
+  facet_wrap(~Order.q, labeller = as_labeller(q_labels)) +
+  scale_shape_manual(values = 1:ncol(sp_matrixq)) +
+  labs(
+    x = "Número de individuos",
+    y = "Diversidad de especies",
+    color = "Edad", fill = "Edad", shape = "Edad"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    strip.background = element_rect(fill = "grey90"),
+    strip.text = element_text(face = "bold")
+  )
+
+print(plot_individuos)
+
+# -------------------------------------------------------------------------
+# OPCIÓN B: Gráficos por Cobertura Muestral (type = 3) -- Corrige el desbalance
+# -------------------------------------------------------------------------
+plot_cobertura <- ggiNEXT(Dq, type = 3, facet.var = "Order.q") +
+  facet_wrap(~Order.q, labeller = as_labeller(q_labels)) +
+  scale_shape_manual(values = 1:ncol(sp_matrixq)) +
+  labs(
+    x = "Cobertura muestral (Sample Coverage)",
+    y = "Diversidad de especies",
+    color = "Edad", fill = "Edad", shape = "Edad"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    strip.background = element_rect(fill = "grey90"),
+    strip.text = element_text(face = "bold")
+  )
+
+print(plot_cobertura)
+
+# # 4. Unir ambos gráficos lado a lado con UNA sola leyenda abajo
+grafico_final <- (plot_individuos + plot_cobertura) +
+  plot_layout(ncol = 2, guides = "collect") & 
+  theme(legend.position = "bottom")
+
+print(grafico_final)
+
+library(tidyverse)
+library(vegan)
+library(car)
+
+# -------------------------------------------------------------------------
+# 0. Preparación y armonización de datos
+# -------------------------------------------------------------------------
+
+# Niveles ordenados para la edad de sucesión
+age_levels <- c("0", "2", "4", "6.5", "10")
+
+# Armonizar categorías de edad y extraer tratamiento desde Aves
+Aves <- Aves %>%
+  mutate(age = case_when(
+    age %in% c("BM", "10") ~ "10",
+    age %in% c("6", "7", "6.5") ~ "6.5",
+    TRUE ~ as.character(age)
+  ),
+  age = factor(age, levels = age_levels))
+
+# Extraer metadata de tratamiento por parcela
+meta_treatment <- Aves %>%
+  select(plot_id, treatment) %>%
+  distinct()
+
+# Actualizar y enriquecer sppr_df
+sppr_df <- sppr_df %>%
+  mutate(age = case_when(
+    age %in% c("BM", "10") ~ "10",
+    age %in% c("6", "7", "6.5") ~ "6.5",
+    TRUE ~ as.character(age)
+  ),
+  age = factor(age, levels = age_levels)) %>%
+  left_join(meta_treatment, by = "plot_id")
+
+
+# -------------------------------------------------------------------------
+# 1. Riqueza de especies por edad
+# -------------------------------------------------------------------------
+
+# Supuestos estadísticos
+sppr_aov <- aov(sppr ~ age, data = sppr_df)
+shapiro.test(residuals(sppr_aov))
+leveneTest(sppr ~ age, data = sppr_df)
+
+# Prueba no paramétrica (Kruskal-Wallis)
+kruskal.test(sppr ~ age, data = sppr_df)
+
+# Gráfico de Riqueza por Edad
+riq <- ggplot(sppr_df, aes(x = age, y = sppr, fill = age)) +
+  geom_violin(alpha = 0.6, trim = FALSE) +
+  geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA, alpha = 0.8) +
+  geom_jitter(width = 0.12, size = 2, alpha = 0.6, color = "gray30") +
+  labs(x = "Edad (años)", y = "Riqueza de especies") +
+  scale_fill_brewer(palette = "YlGnBu") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Resumen estadístico de riqueza
+sppr_df %>%
+  group_by(age) %>%
+  summarise(
+    mean_richness   = mean(sppr, na.rm = TRUE),
+    median_richness = median(sppr, na.rm = TRUE),
+    sd_sppr         = sd(sppr, na.rm = TRUE),
+    n               = n(),
+    min             = min(sppr, na.rm = TRUE),
+    max             = max(sppr, na.rm = TRUE)
+  )
+
+
+# -------------------------------------------------------------------------
+# 2. Matriz de abundancia e Índices de Shannon y Simpson
+# -------------------------------------------------------------------------
+
+# Crear matriz sitio x especie desde Aves
+abund_matrix <- Aves %>%
+  group_by(plot_id, sc_name) %>%
+  summarise(total_abundance = sum(abundance, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = sc_name, values_from = total_abundance, values_fill = 0)
+
+meta_sites <- Aves %>%
+  select(plot_id, age, treatment) %>%
+  distinct()
+
+abund_only <- abund_matrix %>%
+  select(-plot_id)
+
+# Calcular índices de diversidad con vegan
+diversity_df <- data.frame(
+  plot_id   = abund_matrix$plot_id,
+  sp_number = specnumber(abund_only),
+  shannon   = diversity(abund_only, index = "shannon"),
+  simpson   = diversity(abund_only, index = "simpson")
+) %>%
+  left_join(meta_sites, by = "plot_id") %>%
+  mutate(age = factor(age, levels = age_levels))
+
+# Gráfico Diversidad de Shannon
+div <- ggplot(diversity_df, aes(x = age, y = shannon, fill = age)) +
+  geom_violin(alpha = 0.6, trim = FALSE) +
+  geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA, alpha = 0.8, color = "black") +
+  geom_jitter(width = 0.12, size = 2, alpha = 0.6, color = "gray30") +
+  labs(x = "Edad (años)", y = "Diversidad de Shannon") +
+  scale_fill_brewer(palette = "YlGnBu") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+grafico_unificado <- riq + div
+
+print(grafico_unificado)
+
+#Resumen 
+
+resumen_trat_edad <- diversity_df %>%
+  group_by(treatment, age) %>%
+  summarise(
+    n = n(),
+    # Riqueza de especies
+    min_riqueza  = min(sp_number),
+    mean_riqueza = round(mean(sp_number, na.rm = TRUE), 2),
+    max_riqueza  = max(sp_number),
+    # Diversidad de Shannon
+    min_shannon  = round(min(shannon, na.rm = TRUE), 2),
+    mean_shannon = round(mean(shannon, na.rm = TRUE), 2),
+    max_shannon  = round(max(shannon, na.rm = TRUE), 2),
+    # Diversidad de Simpson
+    min_simpson  = round(min(simpson, na.rm = TRUE), 2),
+    mean_simpson = round(mean(simpson, na.rm = TRUE), 2),
+    max_simpson  = round(max(simpson, na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+# -------------------------------------------------------------------------
+# 3. Composición de la comunidad (Especies principales)
+# -------------------------------------------------------------------------
+
+# Resumen de abundancia total por especie y edad
+species_abundance <- Aves %>%
+  group_by(age, sc_name) %>%
+  summarise(total_abundance = sum(abundance, na.rm = TRUE), .groups = 'drop')
+
+# Top 5 especies por edad
+top_species <- species_abundance %>%
+  group_by(age) %>%
+  slice_max(total_abundance, n = 5, with_ties = FALSE) %>%
+  ungroup()
+
+# Agrupar las no principales como "Otras"
+species_abundance_top <- species_abundance %>%
+  mutate(species_group = ifelse(
+    paste(age, sc_name) %in% paste(top_species$age, top_species$sc_name),
+    sc_name,
+    "Otras"
+  ))
+
+# Abundancia relativa del Top 5 + Otras
+relative_abundance <- species_abundance_top %>%
+  group_by(age, species_group) %>%
+  summarise(total_abundance = sum(total_abundance), .groups = 'drop') %>%
+  group_by(age) %>%
+  mutate(rel_abundance = total_abundance / sum(total_abundance))
+
+ggplot(relative_abundance, aes(x = age, y = rel_abundance, fill = species_group)) +
+  geom_col() +
+  labs(x = "Edad (años)", y = "Abundancia relativa", fill = "Especies") +
+  theme_minimal()
+
+
+# -------------------------------------------------------------------------
+# 4. PERMANOVA (Composición de la comunidad con Bray-Curtis)
+# -------------------------------------------------------------------------
+
+adonis_data <- abund_matrix %>%
+  left_join(meta_sites, by = "plot_id")
+
+abund_perm <- adonis_data %>%
+  select(-plot_id, -age, -treatment)
+
+# Matriz de distancia Bray-Curtis
+dist_matrix <- vegdist(abund_perm, method = "bray")
+
+# PERMANOVA
+adonis_result <- adonis2(dist_matrix ~ age, data = adonis_data, permutations = 999)
+print(adonis_result)
+
+library(pairwiseAdonis)
+
+# Comparaciones pareadas post-hoc
+pairwise_result <- pairwise.adonis(abund_perm, adonis_data$age, p.adjust.m = "bonferroni")
+print(pairwise_result)
+
+library(vegan)
+library(ggplot2)
+
+# 1. Calcular NMDS
+set.seed(123)
+nmds_res <- metaMDS(abund_perm, distance = "bray", k = 2, trymax = 100)
+
+# 2. Extraer coordenadas de los sitios
+nmds_scores <- as.data.frame(scores(nmds_res, display = "sites"))
+nmds_scores$age <- adonis_data$age
+
+# 3. Graficar NMDS
+ggplot(nmds_scores, aes(x = NMDS1, y = NMDS2, color = age, fill = age)) +
+  stat_ellipse(geom = "polygon", alpha = 0.2, level = 0.95) +
+  geom_point(size = 3, alpha = 0.8) +
+  annotate("text", x = min(nmds_scores$NMDS1), y = max(nmds_scores$NMDS2),
+           label = paste("Stress =", round(nmds_res$stress, 3)), hjust = 0) +
+  scale_color_brewer(palette = "YlGnBu") +
+  scale_fill_brewer(palette = "YlGnBu") +
+  labs(
+    x = "NMDS1",
+    y = "NMDS2",
+    color = "Edad (años)",
+    fill = "Edad (años)"
+  ) +
+  theme_minimal()
