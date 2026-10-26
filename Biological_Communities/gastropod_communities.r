@@ -249,6 +249,10 @@ library(vegan)
 library(indicspecies)
 
 caracoles <- na.omit(caracoles)
+# 1. Separar datos: Ajustar GLMM SOLO en parcelas en restauración (Años 0 a 6)
+caracoles_rest <- caracoles %>% filter(Age < c(0,10))
+caracoles_bm   <- caracoles %>% filter(Age == 10)  # Bosque Maduro
+caracoles_nf   <- caracoles %>% filter(Age == 0)
 
 # 1. Fit Univariate GLMM for Total Gastropod Abundance
 model_abund <- glmmTMB(
@@ -256,24 +260,78 @@ model_abund <- glmmTMB(
   #(1 | Planting_year) +        # Cohort variance
   #(1 | Monitoring_Date),       # Annual climate/survey variance
   family = nbinom2(),
-  data = caracoles
+  data = caracoles_rest
 )
 
 summary(model_abund)
-
-# 2. Extract Species Matrix & Compute Bray-Curtis Distance
-spec_matrix <- caracoles[, c("Ab_Melampus", "Ab_Littoraria", "Ab_Cerith", "Ab_Thais", "Ab_Vitta")] ## error a partir de acá. 
-dist_bray <- vegdist(sqrt(spec_matrix), method = "bray")
-
-# 3. Repeated-Measures PERMANOVA (Restricted Permutations)
-perm_ctrl <- how(plots = Plots(type = "free", id = caracoles$Plot_Standard), nperm = 999)
-permanova_res <- adonis2(
-  dist_bray ~ Treatment * Age, 
-  data = df, 
-  permutations = perm_ctrl
-)
-print(permanova_res)
-
-# 4. NMDS Ordination
-nmds_res <- metaMDS(spec_matrix, distance = "bray", k = 2, trymax = 100)
-plot(nmds_res, type = "t")
+# 4. Gráfico con eje Y acotado a 200
+ggplot() +
+  # --- CAPA 1: VIOLIN PLOTS ---
+  geom_violin(
+    data = caracoles,
+    aes(x = Age, y = Ab_Gast, group = factor(Age), fill = factor(Age %in% c(0, 10))),
+    alpha = 0.25, color = "gray40", scale = "width", trim = TRUE
+  ) +
+  
+  # --- CAPA 2: BOXPLOTS ---
+  geom_boxplot(
+    data = caracoles,
+    aes(x = Age, y = Ab_Gast, group = factor(Age)),
+    width = 0.18, alpha = 0.6, outlier.shape = NA, color = "gray20"
+  ) +
+  
+  # --- CAPA 3: PUNTOS OBSERVADOS (JITTER) ---
+  geom_jitter(
+    data = caracoles,
+    aes(x = Age, y = Ab_Gast),
+    width = 0.12, height = 0, alpha = 0.4, size = 1.8, color = "#2c3e50"
+  ) +
+  
+  # --- CAPA 4: BANDA DE CONFIANZA DEL MODELO ---
+  geom_ribbon(
+    data = pred_abund,
+    aes(x = x, ymin = pmax(0, conf.low), ymax = conf.high),
+    fill = "#27ae60", alpha = 0.35
+  ) +
+  
+  # --- CAPA 5: LÍNEA DE TENDENCIA DEL MODELO ---
+  geom_line(
+    data = pred_abund,
+    aes(x = x, y = predicted),
+    color = "#1e8449", linewidth = 1.3
+  ) +
+  
+  # --- CAPA 6: ESTIMADOS PUNTUALES (ROMBOS VERDES) ---
+  geom_point(
+    data = ggpredict(model_abund, terms = "Age [1,2,3,4,5,6]"),
+    aes(x = x, y = predicted),
+    color = "#1e8449", size = 3.5, shape = 18
+  ) +
+  
+  # --- COLORES Y ETIQUETAS EJE X ---
+  scale_fill_manual(
+    values = c("FALSE" = "#27ae60", "TRUE" = "#8e44ad"), 
+    guide = "none"
+  ) +
+  scale_x_continuous(
+    breaks = sort(unique(caracoles$Age)),
+    labels = function(x) ifelse(x == 0, "Sin\nRestaurar", ifelse(x == 10, "Bosque\nMaduro", as.character(x)))
+  ) +
+  
+  # --- ZOOM HASTA 200 EN EJE Y ---
+  coord_cartesian(ylim = c(0, 200)) +
+  scale_y_continuous(
+    breaks = seq(0, 200, by = 50),
+    expand = expansion(mult = c(0.01, 0.02))
+  ) +
+  
+  labs(
+    x = "Edad / Estado de Restauración (Años)",
+    y = "Abundancia de Gasterópodos (ind./parcela)"
+      ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 14),
+    axis.title = element_text(face = "bold")
+  )
