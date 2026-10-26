@@ -175,4 +175,105 @@ leveneTest(Rich_Gast ~ as.factor(Age), data = caracoles_sp) #homogenity of varia
 ## since data is not normal use kruskal wallis
 kruskal.test(Rich_Gast ~ as.factor(Age), data = caracoles_sp) # 0.0163 We reject the hypothesis that all groups have equal distribution of richness
 
+#################################################################################
 
+
+
+#################################################################################
+
+
+# 1. Filter dataset for 2026 monitoring year
+df_2026 <- df %>% 
+  filter(Monitoring_Date == 2026)
+
+# 2. Overall Monitoring Summary (2026 Baseline)
+overall_summary_2026 <- df_2026 %>%
+  summarise(
+    Total_Plots_Sampled = n_distinct(Plot_Standard),
+    Total_Gastropods_Counted = sum(Ab_Gast, na.rm = TRUE),
+    Mean_Abundance_Per_Plot = mean(Ab_Gast, na.rm = TRUE),
+    SD_Abundance = sd(Ab_Gast, na.rm = TRUE),
+    Median_Abundance = median(Ab_Gast, na.rm = TRUE),
+    IQR_Abundance = IQR(Ab_Gast, na.rm = TRUE),
+    Mean_Richness = mean(Rich_Gast, na.rm = TRUE),
+    SD_Richness = sd(Rich_Gast, na.rm = TRUE)
+  )
+
+# 3. Grouped Summary Statistics by Treatment (2026)
+treatment_summary_2026 <- df_2026 %>%
+  group_by(Treatment) %>%
+  summarise(
+    N_Plots = n(),
+    Mean_Abundance = round(mean(Ab_Gast, na.rm = TRUE), 2),
+    SD_Abundance = round(sd(Ab_Gast, na.rm = TRUE), 2),
+    Mean_Richness = round(mean(Rich_Gast, na.rm = TRUE), 2),
+    SD_Richness = round(sd(Rich_Gast, na.rm = TRUE), 2),
+    Total_Melampus = sum(Ab_Melampus, na.rm = TRUE),
+    Total_Littoraria = sum(Ab_Littoraria, na.rm = TRUE),
+    Total_Cerith = sum(Ab_Cerith, na.rm = TRUE),
+    Total_Thais = sum(Ab_Thais, na.rm = TRUE),
+    Total_Vitta = sum(Ab_Vitta, na.rm = TRUE)
+  )
+
+# 4. Species Breakdown (Total Abundance, Mean, & Plot Occupancy Rate in 2026)
+species_cols <- c("Ab_Melampus", "Ab_Littoraria", "Ab_Cerith", "Ab_Thais", "Ab_Vitta")
+
+species_summary_2026 <- df_2026 %>%
+  pivot_longer(cols = all_of(species_cols), names_to = "Species", values_to = "Count") %>%
+  mutate(Species = gsub("Ab_", "", Species)) %>%
+  group_by(Species) %>%
+  summarise(
+    Total_Abundance = sum(Count, na.rm = TRUE),
+    Mean_per_Plot = round(mean(Count, na.rm = TRUE), 2),
+    SD = round(sd(Count, na.rm = TRUE), 2),
+    Plot_Occupancy_Pct = round((sum(Count > 0, na.rm = TRUE) / n()) * 100, 1)
+  ) %>%
+  arrange(desc(Total_Abundance))
+
+# Display results
+print("--- OVERALL SUMMARY 2026 ---")
+print(overall_summary_2026)
+
+print("--- SUMMARY BY TREATMENT 2026 ---")
+print(treatment_summary_2026)
+
+print("--- SPECIES METRICS 2026 ---")
+print(species_summary_2026)
+
+#########################
+
+#########################
+library(lme4)
+library(glmmTMB)
+library(vegan)
+library(indicspecies)
+
+caracoles <- na.omit(caracoles)
+
+# 1. Fit Univariate GLMM for Total Gastropod Abundance
+model_abund <- glmmTMB(
+  Ab_Gast ~ Age + (1 | Plot_Standard),
+  #(1 | Planting_year) +        # Cohort variance
+  #(1 | Monitoring_Date),       # Annual climate/survey variance
+  family = nbinom2(),
+  data = caracoles
+)
+
+summary(model_abund)
+
+# 2. Extract Species Matrix & Compute Bray-Curtis Distance
+spec_matrix <- caracoles[, c("Ab_Melampus", "Ab_Littoraria", "Ab_Cerith", "Ab_Thais", "Ab_Vitta")] ## error a partir de acá. 
+dist_bray <- vegdist(sqrt(spec_matrix), method = "bray")
+
+# 3. Repeated-Measures PERMANOVA (Restricted Permutations)
+perm_ctrl <- how(plots = Plots(type = "free", id = caracoles$Plot_Standard), nperm = 999)
+permanova_res <- adonis2(
+  dist_bray ~ Treatment * Age, 
+  data = df, 
+  permutations = perm_ctrl
+)
+print(permanova_res)
+
+# 4. NMDS Ordination
+nmds_res <- metaMDS(spec_matrix, distance = "bray", k = 2, trymax = 100)
+plot(nmds_res, type = "t")
